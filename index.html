@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>美しい数式プレビュー</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <style>
+    :root { --bg:#0f1117; --card:#1a1d27; --border:#2a2e3a; --text:#e8eaed; --muted:#9aa0a6; --accent:#8eb4ff; --math-bg:#22283a; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #1c2340 0%, var(--bg) 55%);
+      color: var(--text); padding: 32px 20px 48px;
+    }
+    .wrap { width: 100%; }
+    h1 { font-weight: 600; font-size: 1.6rem; margin: 0 0 16px; }
+    textarea {
+      width: 100%; min-height: 140px; resize: vertical;
+      background: var(--card); color: var(--text); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.95rem; line-height: 1.5; outline: none;
+    }
+    textarea::placeholder { color: #6d7380; }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(142,180,255,.18); }
+    .preview { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px 20px; min-height: 140px; margin-top: 16px; }
+    .row { display: block; text-align: left; font-size: 1.05rem; line-height: 1.9; margin: 0.35em 0; color: #d5d8e0; }
+    .row sub, .row sup { font-size: 0.72em; }
+    .math {
+      display: flex; align-items: center; gap: 0.15em; text-align: left !important; margin: 0.7em 0;
+      padding: 0.72em 1em 0.72em 0.95em; border-radius: 12px; overflow-x: auto;
+      background: linear-gradient(90deg, rgba(142,180,255,.95), rgba(142,180,255,.2)) left / 3px 100% no-repeat, var(--math-bg);
+      box-shadow: inset 0 0 0 1px rgba(142,180,255,.16);
+      color: #f4f7ff; font-size: 1.05rem;
+    }
+    .math .katex { font-size: 1.28em; color: #f4f7ff; }
+    .math .katex-display, .math .katex-display > .katex { display: block; text-align: left !important; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>数式プレビュー</h1>
+    <textarea id="input" placeholder="ここに貼り付けてください"></textarea>
+    <div class="preview" id="preview"></div>
+  </div>
+  <script>
+    const input = document.getElementById("input");
+    const preview = document.getElementById("preview");
+    const OPS = /[=＝+＋\-−*×÷\/<>＜＞≤≥≦≧≠≈∼≃≡⇒⇔→←↔±∓∈∉⊂⊃⊆⊇∪∩∑∫∏√∞∂∇\\≽≼≻≺⪰⪯≳≲≫≪]/;
+    const TEX_OPS = { "≽": "\\succcurlyeq ", "≼": "\\preccurlyeq ", "≻": "\\succ ", "≺": "\\prec ", "⪰": "\\succeq ", "⪯": "\\preceq ", "≳": "\\gtrsim ", "≲": "\\lesssim ", "≫": "\\gg ", "≪": "\\ll ", "≦": "\\leq ", "≧": "\\geq " };
+
+    function isJapanese(ch) {
+      const c = ch.codePointAt(0);
+      return (c >= 0x3040 && c <= 0x30ff) || (c >= 0x4e00 && c <= 0x9fff) ||
+        (c >= 0x3001 && c <= 0x303f) || (c >= 0xff01 && c <= 0xff60);
+    }
+    function looksLikeMath(s) { return OPS.test(s); }
+    function toTex(s) {
+      return [...s].map((ch) => TEX_OPS[ch] || ch).join("");
+    }
+
+    function appendPlain(parent, text) {
+      let i = 0;
+      let buf = "";
+      const flush = () => {
+        if (!buf) return;
+        parent.appendChild(document.createTextNode(buf));
+        buf = "";
+      };
+      while (i < text.length) {
+        if ((text[i] === "_" || text[i] === "^") && text[i + 1] === "{") {
+          const close = text.indexOf("}", i + 2);
+          if (close !== -1) {
+            flush();
+            const el = document.createElement(text[i] === "_" ? "sub" : "sup");
+            el.textContent = text.slice(i + 2, close);
+            parent.appendChild(el);
+            i = close + 1;
+            continue;
+          }
+        }
+        buf += text[i++];
+      }
+      flush();
+    }
+
+    function nodeToTex(node) {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (node.nodeType !== Node.ELEMENT_NODE) return "";
+      const tag = node.tagName.toLowerCase();
+      const enc = node.getAttribute("encoding") || "";
+      if (tag === "annotation" && /tex/i.test(enc)) return node.textContent.trim();
+      if (tag === "script" && /math\/tex/i.test(node.type || "")) return node.textContent.trim();
+      if (tag === "math") {
+        const ann = node.querySelector("annotation[encoding*='tex']");
+        if (ann) return ann.textContent.trim();
+      }
+      const inner = [...node.childNodes].map(nodeToTex).join("");
+      if (tag === "sub") return "_{" + inner + "}";
+      if (tag === "sup") return "^{" + inner + "}";
+      if (tag === "br" || tag === "p" || tag === "div") return inner + "\n";
+      return inner;
+    }
+    function htmlToTex(html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const anns = [...doc.querySelectorAll("annotation[encoding*='tex'], script[type*='math/tex']")];
+      if (anns.length) return anns.map((n) => n.textContent.trim()).filter(Boolean).join("\n\n");
+      return nodeToTex(doc.body).replace(/\n{2,}/g, "\n").trim();
+    }
+
+    function segment(line) {
+      const parts = [];
+      let buf = "", mode = null;
+      const push = () => { if (buf) parts.push({ type: mode, text: buf }); buf = ""; };
+      for (const ch of line) {
+        const next = ch === "（" || ch === "）" || isJapanese(ch) ? "ja" : "other";
+        if (mode && next !== mode) push();
+        mode = next; buf += ch;
+      }
+      push();
+      return parts.map((part) => part.type === "other" && looksLikeMath(part.text) ? { type: "math", text: part.text } : { type: "ja", text: part.text });
+    }
+
+    function blocksOf(line) {
+      const out = [];
+      let depth = 0, buf = "";
+      const push = (kind) => { if (buf) out.push({ kind, text: buf }); buf = ""; };
+      for (const ch of line) {
+        if (ch === "（") { if (depth === 0) push("out"); depth++; buf += ch; }
+        else if (ch === "）" && depth > 0) { buf += ch; depth--; if (depth === 0) push("in"); }
+        else buf += ch;
+      }
+      push(depth > 0 ? "in" : "out");
+      return out.filter((b) => b.text.trim());
+    }
+
+    function addMath(parent, tex, display, suffix) {
+      const el = document.createElement(display ? "div" : "span");
+      if (display) el.className = "math";
+      katex.render(toTex(tex.trim()), el, { throwOnError: false, displayMode: display });
+      el.querySelectorAll(".katex-display").forEach((n) => { n.style.textAlign = "left"; n.style.margin = "0"; });
+      if (suffix) el.appendChild(document.createTextNode(suffix));
+      parent.appendChild(el);
+    }
+
+    function renderInline(parent, text) {
+      for (const seg of segment(text)) {
+        if (seg.type === "math") addMath(parent, seg.text, false);
+        else appendPlain(parent, seg.text);
+      }
+    }
+
+    function render() {
+      preview.innerHTML = "";
+      const raw = input.value.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      if (!raw.trim()) return;
+      for (const line of raw.split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        let pending = null;
+        const flush = () => {
+          if (!pending) return;
+          preview.appendChild(pending);
+          pending = null;
+        };
+        const row = () => {
+          if (!pending) { pending = document.createElement("div"); pending.className = "row"; }
+          return pending;
+        };
+        for (const block of blocksOf(line)) {
+          if (block.kind === "in") { renderInline(row(), block.text); continue; }
+          const segs = segment(block.text);
+          for (let i = 0; i < segs.length; i++) {
+            const seg = segs[i];
+            if (!seg.text) continue;
+            if (seg.type === "math") {
+              flush();
+              let suffix = "";
+              const next = segs[i + 1];
+              const after = segs[i + 2];
+              if (next && next.type !== "math" && next.text.startsWith("；")) {
+                suffix = "；";
+                next.text = next.text.slice(1);
+              } else if (next && next.type !== "math" && next.text.startsWith("、") && after && after.type === "math") {
+                suffix = "、";
+                next.text = next.text.slice(1);
+              }
+              addMath(preview, seg.text, true, suffix);
+            } else {
+              appendPlain(row(), seg.text);
+            }
+          }
+        }
+        flush();
+      }
+    }
+
+    input.addEventListener("paste", (e) => {
+      const html = e.clipboardData && e.clipboardData.getData("text/html");
+      if (html && /sub|sup|annotation|math\/tex|<math/i.test(html)) {
+        e.preventDefault();
+        input.value = htmlToTex(html);
+        render();
+      } else {
+        setTimeout(render, 0);
+      }
+    });
+    input.addEventListener("input", render);
+  </script>
+</body>
+</html>
