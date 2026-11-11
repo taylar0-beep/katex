@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ameblo LaTeX Generator</title>
+    <!-- Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+        }
+        /* Custom scrollbar for textareas */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+
+    <div class="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-8 sm:px-10 text-center">
+            <h1 class="text-3xl font-bold text-white tracking-tight">Ameblo LaTeX Generator</h1>
+            <p class="mt-2 text-blue-100 text-sm font-medium">アメブロ向けにLaTeX数式を画像HTMLタグへ一瞬で変換します</p>
+        </div>
+
+        <div class="px-6 py-8 sm:px-10 space-y-8">
+            
+            <!-- Input Section -->
+            <div>
+                <label for="latex-input" class="block text-sm font-semibold text-slate-700 mb-2">
+                    1. LaTeXコードを入力
+                </label>
+                <div class="relative">
+                    <textarea id="latex-input" rows="4" 
+                        class="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-base p-4 bg-slate-50 border transition duration-150 ease-in-out resize-y"
+                        placeholder="例: E = mc^2"></textarea>
+                </div>
+                <p class="mt-2 text-xs text-slate-500 flex items-center">
+                    <svg class="w-4 h-4 mr-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    数式を入力すると、自動的にプレビューとHTMLが生成されます。
+                </p>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                <label class="block text-sm font-semibold text-slate-700 mb-4">
+                    2. プレビュー
+                </label>
+                <div id="preview-container" class="min-h-[100px] flex items-center justify-center bg-white rounded-lg border border-dashed border-slate-300 p-6 overflow-x-auto">
+                    <!-- Image will be injected here -->
+                    <img id="preview-img" src="" alt="Math Preview" class="max-w-full hidden drop-shadow-sm transition-opacity duration-300">
+                    <p id="preview-placeholder" class="text-slate-400 text-sm italic">数式を入力するとここに表示されます</p>
+                </div>
+            </div>
+
+            <!-- Output Section -->
+            <div>
+                <div class="flex justify-between items-end mb-2">
+                    <label for="html-output" class="block text-sm font-semibold text-slate-700">
+                        3. アメブロ用HTMLコード（通常表示エディタの「HTML表示」に貼り付け）
+                    </label>
+                </div>
+                <div class="relative group">
+                    <textarea id="html-output" rows="3" readonly
+                        class="block w-full rounded-lg border-slate-300 shadow-sm bg-slate-100 text-slate-600 sm:text-sm p-4 font-mono focus:ring-0 focus:border-slate-300 resize-none"></textarea>
+                    
+                    <!-- Copy Button -->
+                    <button id="copy-btn" 
+                        class="absolute bottom-3 right-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg id="copy-icon" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <span id="copy-text">HTMLをコピー</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 text-center sm:text-left">
+            <p class="text-xs text-slate-500">Powered by CodeCogs API</p>
+        </div>
+    </div>
+
+    <!-- Notification Toast (Hidden by default) -->
+    <div id="toast" class="fixed bottom-5 right-5 transform transition-all duration-300 translate-y-20 opacity-0 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center z-50">
+        <svg class="w-5 h-5 mr-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span class="font-medium text-sm">クリップボードにコピーしました！</span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputEl = document.getElementById('latex-input');
+            const outputEl = document.getElementById('html-output');
+            const previewImg = document.getElementById('preview-img');
+            const previewPlaceholder = document.getElementById('preview-placeholder');
+            const copyBtn = document.getElementById('copy-btn');
+            const copyText = document.getElementById('copy-text');
+            const copyIcon = document.getElementById('copy-icon');
+            const toast = document.getElementById('toast');
+
+            // 苫米地定理のモテライフハック数式を初期値としてセット
+            const defaultLatex = 'V = V_0 - \\kappa PQEC';
+            
+            // Generate CodeCogs URL
+            const generateImageUrl = (latex) => {
+                // Encode the LaTeX string for safe URL usage
+                const encodedLatex = encodeURIComponent(latex);
+                // Using dpi 200 and white background for good visibility on Ameblo
+                return `https://latex.codecogs.com/png.image?\\dpi{200}\\bg{white}${encodedLatex}`;
+            };
+
+            // Update UI based on input
+            const updateUI = () => {
+                const latex = inputEl.value.trim();
+                
+                if (latex === '') {
+                    previewImg.classList.add('hidden');
+                    previewImg.src = '';
+                    previewPlaceholder.classList.remove('hidden');
+                    outputEl.value = '';
+                    copyBtn.disabled = true;
+                    return;
+                }
+
+                const imageUrl = generateImageUrl(latex);
+                
+                // Update Preview Image
+                previewImg.src = imageUrl;
+                previewImg.classList.remove('hidden');
+                previewPlaceholder.classList.add('hidden');
+                
+                // Update Output HTML
+                // border:none and max-width:100% added for responsive blog design
+                const htmlCode = `<img src="${imageUrl}" alt="math formula" style="border: none; max-width: 100%; height: auto;" />`;
+                outputEl.value = htmlCode;
+                copyBtn.disabled = false;
+            };
+
+            // Copy to clipboard logic using document.execCommand for better iframe compatibility
+            const copyToClipboard = () => {
+                if (outputEl.value.trim() === '') return;
+
+                outputEl.select();
+                outputEl.setSelectionRange(0, 99999); // For mobile devices
+
+                try {
+                    document.execCommand('copy');
+                    showSuccessFeedback();
+                } catch (err) {
+                    console.error('Copy failed', err);
+                    // Fallback visual feedback if failed
+                    copyText.textContent = 'コピー失敗';
+                    setTimeout(() => { copyText.textContent = 'HTMLをコピー'; }, 2000);
+                }
+                
+                // Clear selection
+                window.getSelection().removeAllRanges();
+            };
+
+            // Visual feedback for successful copy
+            const showSuccessFeedback = () => {
+                // Change button state
+                const originalBg = copyBtn.className;
+                copyBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                copyText.textContent = 'コピー完了!';
+                copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
+
+                // Show toast
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                
+                setTimeout(() => {
+                    // Revert button state
+                    copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    copyBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    copyText.textContent = 'HTMLをコピー';
+                    copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>';
+                    
+                    // Hide toast
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 2500);
+            };
+
+            // Event Listeners
+            inputEl.addEventListener('input', updateUI);
+            copyBtn.addEventListener('click', copyToClipboard);
+
+            // Initialize app
+            inputEl.value = defaultLatex;
+            updateUI();
+        });
+    </script>
+</body>
+</html>
